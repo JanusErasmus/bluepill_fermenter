@@ -61,6 +61,7 @@
 
 #include "interface_nrf24.h"
 #include "stm32_tm1637.h"
+#include "fermenter.h"
 
 uint8_t netAddress[] = {0x03, 0x44, 0x55};
 #define payload_length 16
@@ -156,13 +157,57 @@ void sampleAnalog(int &temperature, int &voltage0, int &voltage1)
 	HAL_ADC_Stop(&hadc1);
 }
 
+void coolerControl(bool state)
+{
+	printf("Mains cooler: %s\n", state?"ON":"OFF");
+	if(state)
+		HAL_GPIO_WritePin(COOLER_GPIO_Port, COOLER_Pin, GPIO_PIN_SET);
+	else
+		HAL_GPIO_WritePin(COOLER_GPIO_Port, COOLER_Pin, GPIO_PIN_RESET);
+}
+
+void heaterControl(bool state)
+{
+	printf("Mains heater: %s\n", state?"ON":"OFF");
+	if(state)
+		HAL_GPIO_WritePin(HEATER_GPIO_Port, HEATER_Pin, GPIO_PIN_SET);
+	else
+		HAL_GPIO_WritePin(HEATER_GPIO_Port, HEATER_Pin, GPIO_PIN_RESET);
+}
+
+uint32_t lastSampleTime = 0;
+int lastCPU, lastTemp0, lastTemp1;
+
 void sampleTemperatures(int &cpu, int &temp0, int &temp1)
 {
 	int v0, v1;
-	sampleAnalog(cpu, v0, v1);
+	//only sample every second
+	if(lastSampleTime)
+	{
+		if(HAL_GetTick() > (lastSampleTime + 1000))
+		{
+			sampleAnalog(cpu, v0, v1);
+		}
+		else
+		{
+			cpu = lastCPU;
+			temp0 = lastTemp0;
+			temp1 = lastTemp1;
+			return;
+		}
+	}
+	else
+	{
+		sampleAnalog(cpu, v0, v1);
+	}
 
 	temp0 = ((v0 << 1) - 2730000) / 10;
 	temp1 = ((v1 << 1) - 2730000) / 10;
+
+	lastSampleTime = HAL_GetTick();
+	lastCPU = cpu;
+	lastTemp0 = temp0;
+	lastTemp1 = temp1;
 }
 
 void report(uint8_t *address)
@@ -291,29 +336,41 @@ int main(void)
   InterfaceNRF24::init(&hspi1, netAddress, 3);
   InterfaceNRF24::get()->setRXcb(NRFreceivedCB);
 
+  Fermenter fermenter(sampleTemperatures,
+		  coolerControl,
+		  heaterControl);
+
   printf("Bluepills @ %dHz\n", (int)HAL_RCC_GetSysClockFreq());
   printf(" - APB2 %dHz\n", (int)HAL_RCC_GetPCLK1Freq());
   printf(" - APB1 %dHz\n", (int)HAL_RCC_GetPCLK2Freq());
   MX_RTC_Init();
 
 int sendTemp = 0;
+int prevTemp = 0;
 
   /* Infinite loop */
   while (1)
   {
 	  terminal_run();
 	  InterfaceNRF24::get()->run();
+	  fermenter.run();
 
-      HAL_Delay(100);
+	  HAL_Delay(100);
 
-      //send every minute;
+      //send temperature samples every minute;
       if(sendTemp++ > 600)
       {
     	  sendTemp = 0;
-    	  reportNow();
+    	  int cpu, temp0, temp1;
+    	  sampleTemperatures(cpu, temp0, temp1);
+    	  //only report if temperature changed by a degree
+    	  if(((prevTemp - 500) > temp1) || (temp1 > (prevTemp + 500)))
+    	  {
+    		  prevTemp = temp1;
+    		  reportNow();
+    	  }
       }
   }
-
 }
 
 
@@ -483,6 +540,20 @@ static void MX_GPIO_Init(void)
 	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
 	GPIO_InitStruct.Pull = GPIO_PULLUP;
 	HAL_GPIO_Init(NRF_IRQ_GPIO_Port, &GPIO_InitStruct);
+
+	/*Configure GPIO pin : COOLER_Pin */
+	GPIO_InitStruct.Pin = COOLER_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+	GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(COOLER_GPIO_Port, &GPIO_InitStruct);
+
+	/*Configure GPIO pin : HEATER_Pin */
+	GPIO_InitStruct.Pin = HEATER_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+	GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(HEATER_GPIO_Port, &GPIO_InitStruct);
 
 	/*Configure GPIO pin : ADC12_IN0 */
 	GPIO_InitStruct.Pin = GPIO_PIN_0;

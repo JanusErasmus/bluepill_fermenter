@@ -183,14 +183,23 @@ Wire Wire Line
 Wire Wire Line
 	6900 3250 6900 2300
 $Comp
-L power:+5V #PWR?
+L power:+5V #PWR0123
 U 1 1 5C13D36B
 P 6900 2300
-F 0 "#PWR?" H 6900 2150 50  0001 C CNN
+F 0 "#PWR0123" H 6900 2150 50  0001 C CNN
 F 1 "+5V" H 6915 2473 50  0000 C CNN
 F 2 "" H 6900 2300 50  0001 C CNN
 F 3 "" H 6900 2300 50  0001 C CNN
 	1    6900 2300
 	1    0    0    -1  
 $EndComp
+Wire Wire Line
+	6550 3350 7250 3350
+Wire Wire Line
+	6550 3450 7250 3450
+Text HLabel 7250 3450 2    50   Output ~ 0
+PB8
+Text HLabel 7250 3350 2    50   Output ~ 0
+PB9
+NoConn ~ 6550 3150
 $EndSCHEMATC

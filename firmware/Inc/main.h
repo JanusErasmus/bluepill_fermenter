@@ -65,8 +65,10 @@
 #define NRF_CE_Pin GPIO_PIN_1
 #define NRF_IRQ_GPIO_Port GPIOB
 #define NRF_IRQ_Pin GPIO_PIN_0
-#define IR_CCO_GPIO_Port GPIOB
-#define IR_CCO_Pin GPIO_PIN_9
+#define COOLER_GPIO_Port GPIOB
+#define COOLER_Pin GPIO_PIN_8
+#define HEATER_GPIO_Port GPIOB
+#define HEATER_Pin GPIO_PIN_9
 
 
 /* ########################## Assert Selection ############################## */

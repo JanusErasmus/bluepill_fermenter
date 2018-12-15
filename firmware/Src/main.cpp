@@ -92,7 +92,7 @@ typedef struct {
 	uint16_t temperature;	//2
 }__attribute__((packed, aligned(4))) nodeData_s;
 
-void sampleAnalog(int &temperature, int &voltage0, int &voltage1)
+void sampleAnalog(double &temperature, double &voltage0, double &voltage1)
 {
 	uint32_t adc0 = 0;
 	uint32_t adc1 = 0;
@@ -107,15 +107,15 @@ void sampleAnalog(int &temperature, int &voltage0, int &voltage1)
 		if(HAL_ADC_PollForConversion(&hadc1, 1000) == HAL_OK)
 		{
 			adc0 += HAL_ADC_GetValue(&hadc1);
-			//printf("ADC: %d\n", adc);
+			//printf("ADC0: %d\n", adc0);
 		}
 
 
 		HAL_ADC_Start(&hadc1);
 		if(HAL_ADC_PollForConversion(&hadc1, 1000) == HAL_OK)
 		{
-			adc1 = HAL_ADC_GetValue(&hadc1);
-			//printf("ADC: %d\n", adc);
+			adc1 += HAL_ADC_GetValue(&hadc1);
+			//printf("ADC1: %d\n", adc1);
 		}
 
 		HAL_ADC_Start(&hadc1);
@@ -139,48 +139,31 @@ void sampleAnalog(int &temperature, int &voltage0, int &voltage1)
 	adc3 >>= 4;
 
 	//this amount of steps measure 1.2V
-	uint32_t step = 1200000 / adc0;
+	double step = 1.2 / adc0;
 	//printf("vref %d - ADC Step %d\n", (int)adc0, (int)step);
 
-	int voltage = (adc1 * step);
-	//printf(" *	%d\n", (int)voltage);
-	voltage = 1.43e6 - voltage;
-	//printf(" -	%d\n", voltage);
-	voltage /= 4200;
-	//printf(" /	%d\n", voltage);
-	temperature = 25000.0 + voltage;
+	//printf(" .	%d\n", (int)adc1);
+	double voltage = ((double)adc1 * step);
+	//printf(" *	%0.3f\n", voltage);
+	voltage = 1.43 - voltage;
+	//printf(" -	%0.3f\n", voltage);
+	voltage /= 0.0043;
+	//printf(" /	%0.3f\n", voltage);
+	temperature = (25.0 + voltage) - 11;
 
 	//measure raw voltage
-	voltage0 = ((adc2 * step) + 10000);
-	voltage1 = ((adc3 * step) + 10000);
+	voltage0 = (((double)adc2 * step) + 0.01);
+	voltage1 = (((double)adc3 * step) + 0.01);
 
 	HAL_ADC_Stop(&hadc1);
 }
 
-void coolerControl(bool state)
-{
-	printf("Mains cooler: %s\n", state?"ON":"OFF");
-	if(state)
-		HAL_GPIO_WritePin(COOLER_GPIO_Port, COOLER_Pin, GPIO_PIN_SET);
-	else
-		HAL_GPIO_WritePin(COOLER_GPIO_Port, COOLER_Pin, GPIO_PIN_RESET);
-}
-
-void heaterControl(bool state)
-{
-	printf("Mains heater: %s\n", state?"ON":"OFF");
-	if(state)
-		HAL_GPIO_WritePin(HEATER_GPIO_Port, HEATER_Pin, GPIO_PIN_SET);
-	else
-		HAL_GPIO_WritePin(HEATER_GPIO_Port, HEATER_Pin, GPIO_PIN_RESET);
-}
-
 uint32_t lastSampleTime = 0;
-int lastCPU, lastTemp0, lastTemp1;
+double lastCPU, lastTemp0, lastTemp1;
 
-void sampleTemperatures(int &cpu, int &temp0, int &temp1)
+void sampleTemperatures(double &cpu, double &temp0, double &temp1)
 {
-	int v0, v1;
+	double v0, v1;
 	//only sample every second
 	if(lastSampleTime)
 	{
@@ -201,8 +184,8 @@ void sampleTemperatures(int &cpu, int &temp0, int &temp1)
 		sampleAnalog(cpu, v0, v1);
 	}
 
-	temp0 = ((v0 << 1) - 2730000) / 10;
-	temp1 = ((v1 << 1) - 2730000) / 10;
+	temp0 = ((v0 * 2) - 2.73) * 100.0;
+	temp1 = ((v1 * 2) - 2.73) * 100.0;
 
 	lastSampleTime = HAL_GetTick();
 	lastCPU = cpu;
@@ -213,15 +196,19 @@ void sampleTemperatures(int &cpu, int &temp0, int &temp1)
 void report(uint8_t *address)
 {
 	//HAL_Delay(500);
-	int cpu,  temp0, temp1;
+	double cpu,  temp0, temp1;
 	sampleTemperatures(cpu, temp0, temp1);
 	nodeData_s pay;
 	memset(&pay, 0, 16);
 	pay.timestamp = HAL_GetTick();
-	pay.temperature = cpu;
+	pay.temperature = cpu * 1000;
 
-	pay.voltages[0] = temp0;
-	pay.voltages[1] = temp1;
+
+	if(HAL_GPIO_ReadPin(COOLER_GPIO_Port, COOLER_Pin))
+		pay.outputs |= 1;
+
+	pay.voltages[0] = temp0 * 1000;
+	pay.voltages[1] = temp1 * 1000;
 	int result = -3;
 	int retries = 3;
 	do
@@ -240,6 +227,28 @@ void report(uint8_t *address)
 void reportNow()
 {
 	report(netAddress);
+}
+
+void coolerControl(bool state)
+{
+	printf("Mains cooler: %s\n", state?"ON":"OFF");
+	if(state)
+		HAL_GPIO_WritePin(COOLER_GPIO_Port, COOLER_Pin, GPIO_PIN_SET);
+	else
+		HAL_GPIO_WritePin(COOLER_GPIO_Port, COOLER_Pin, GPIO_PIN_RESET);
+
+	reportNow();
+}
+
+void heaterControl(bool state)
+{
+	printf("Mains heater: %s\n", state?"ON":"OFF");
+	if(state)
+		HAL_GPIO_WritePin(HEATER_GPIO_Port, HEATER_Pin, GPIO_PIN_SET);
+	else
+		HAL_GPIO_WritePin(HEATER_GPIO_Port, HEATER_Pin, GPIO_PIN_RESET);
+
+	reportNow();
 }
 
 bool isDay()
@@ -345,12 +354,25 @@ int main(void)
   printf(" - APB1 %dHz\n", (int)HAL_RCC_GetPCLK2Freq());
   MX_RTC_Init();
 
-int sendTemp = 0;
-int prevTemp = 0;
+  int sendTemp = 0;
+  double prevTemp = 0;
+  bool flag = false;
 
   /* Infinite loop */
   while (1)
   {
+	  if(flag)
+	  {
+		  flag = false;
+			HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+	  }
+	  else
+	  {
+
+		  flag = true;
+		  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
+	  }
+
 	  terminal_run();
 	  InterfaceNRF24::get()->run();
 	  fermenter.run();
@@ -361,10 +383,10 @@ int prevTemp = 0;
       if(sendTemp++ > 600)
       {
     	  sendTemp = 0;
-    	  int cpu, temp0, temp1;
+    	  double cpu, temp0, temp1;
     	  sampleTemperatures(cpu, temp0, temp1);
     	  //only report if temperature changed by a degree
-    	  if(((prevTemp - 500) > temp1) || (temp1 > (prevTemp + 500)))
+    	  if(((prevTemp - 0.5) > temp1) || (temp1 > (prevTemp + 0.5)))
     	  {
     		  prevTemp = temp1;
     		  reportNow();
@@ -695,11 +717,11 @@ void adc(uint8_t argc, char **argv)
 //	printf("voltage0: %d\n", voltage0);
 //	printf("voltage1: %d\n", voltage1);
 
-	int cpu, temp0, temp1;
+	double cpu, temp0, temp1;
 	sampleTemperatures(cpu, temp0, temp1);
-	printf("cpu  : %d\n", cpu);
-	printf("temp0: %d\n", temp0);
-	printf("temp1: %d\n", temp1);
+	printf("cpu  : %0.3f\n", cpu);
+	printf("temp0: %0.3f\n", temp0);
+	printf("temp1: %0.3f\n", temp1);
 }
 
 

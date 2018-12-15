@@ -10,7 +10,7 @@
 
 class Fermenter
 {
-	void (*mSample_cb)(int &cpu, int &temp0, int &temp1);
+	void (*mSample_cb)(double &cpu, double &temp0, double &temp1);
 	void (*mCoolerControl)(bool state);
 	void (*mHeaterControl)(bool state);
 	uint32_t mCoolerDisableTime;
@@ -18,7 +18,7 @@ class Fermenter
 	double mSetPoint;
 
 public:
-	Fermenter(void (*sample_temp_cb)(int &cpu, int &temp0, int &temp1),
+	Fermenter(void (*sample_temp_cb)(double &cpu, double &temp0, double &temp1),
 			void (*cooler_control)(bool state),
 			void (*heater_control)(bool state));
 	void run();

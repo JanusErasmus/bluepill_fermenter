@@ -59,16 +59,26 @@
 
 #define LED_GPIO_Port GPIOC
 #define LED_Pin GPIO_PIN_13
+
 #define SPI1_CS_GPIO_Port GPIOA
 #define SPI1_CS_Pin GPIO_PIN_4
 #define NRF_CE_GPIO_Port GPIOB
 #define NRF_CE_Pin GPIO_PIN_1
 #define NRF_IRQ_GPIO_Port GPIOB
 #define NRF_IRQ_Pin GPIO_PIN_0
-#define COOLER_GPIO_Port GPIOB
-#define COOLER_Pin GPIO_PIN_8
+
+
+#define TM1637_CLK_PORT GPIOB
+#define TM1637_CLK_PIN GPIO_PIN_8
+#define TM1637_CLK_PORT_CLK_ENABLE __HAL_RCC_GPIOB_CLK_ENABLE
+#define TM1637_DIO_PORT GPIOB
+#define TM1637_DIO_PIN GPIO_PIN_9
+#define TM1637_DIO_PORT_CLK_ENABLE __HAL_RCC_GPIOB_CLK_ENABLE
+
 #define HEATER_GPIO_Port GPIOB
-#define HEATER_Pin GPIO_PIN_9
+#define HEATER_Pin GPIO_PIN_12
+#define COOLER_GPIO_Port GPIOB
+#define COOLER_Pin GPIO_PIN_13
 
 
 /* ########################## Assert Selection ############################## */

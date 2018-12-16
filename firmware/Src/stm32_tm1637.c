@@ -15,12 +15,6 @@ void _tm1637DioLow(void);
 
 // Configuration.
 
-#define CLK_PORT GPIOB
-#define CLK_PIN GPIO_PIN_8
-#define CLK_PORT_CLK_ENABLE __HAL_RCC_GPIOB_CLK_ENABLE
-#define DIO_PORT GPIOB
-#define DIO_PIN GPIO_PIN_9
-#define DIO_PORT_CLK_ENABLE __HAL_RCC_GPIOB_CLK_ENABLE
 
 
 const char segmentMap[] = {
@@ -32,16 +26,16 @@ const char segmentMap[] = {
 
 void tm1637Init(void)
 {
-    CLK_PORT_CLK_ENABLE();
-    DIO_PORT_CLK_ENABLE();
+	TM1637_CLK_PORT_CLK_ENABLE();
+	TM1637_DIO_PORT_CLK_ENABLE();
     GPIO_InitTypeDef g = {0};
     g.Pull = GPIO_PULLUP;
     g.Mode = GPIO_MODE_OUTPUT_OD; // OD = open drain
     g.Speed = GPIO_SPEED_FREQ_HIGH;
-    g.Pin = CLK_PIN;
-    HAL_GPIO_Init(CLK_PORT, &g);
-    g.Pin = DIO_PIN;
-    HAL_GPIO_Init(DIO_PORT, &g);
+    g.Pin = TM1637_CLK_PIN;
+    HAL_GPIO_Init(TM1637_CLK_PORT, &g);
+    g.Pin = TM1637_DIO_PIN;
+    HAL_GPIO_Init(TM1637_DIO_PORT, &g);
 
     tm1637SetBrightness(1);
 }
@@ -163,20 +157,20 @@ void _tm1637DelayUsec(unsigned int i)
 
 void _tm1637ClkHigh(void)
 {
-    HAL_GPIO_WritePin(CLK_PORT, CLK_PIN, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(TM1637_CLK_PORT, TM1637_CLK_PIN, GPIO_PIN_SET);
 }
 
 void _tm1637ClkLow(void)
 {
-    HAL_GPIO_WritePin(CLK_PORT, CLK_PIN, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(TM1637_CLK_PORT, TM1637_CLK_PIN, GPIO_PIN_RESET);
 }
 
 void _tm1637DioHigh(void)
 {
-    HAL_GPIO_WritePin(DIO_PORT, DIO_PIN, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(TM1637_DIO_PORT, TM1637_DIO_PIN, GPIO_PIN_SET);
 }
 
 void _tm1637DioLow(void)
 {
-    HAL_GPIO_WritePin(DIO_PORT, DIO_PIN, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(TM1637_DIO_PORT, TM1637_DIO_PIN, GPIO_PIN_RESET);
 }

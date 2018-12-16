@@ -92,12 +92,13 @@ typedef struct {
 	uint16_t temperature;	//2
 }__attribute__((packed, aligned(4))) nodeData_s;
 
-void sampleAnalog(double &temperature, double &voltage0, double &voltage1)
+void sampleAnalog(double &temperature, double &voltage0, double &voltage1, double &voltage2)
 {
 	uint32_t adc0 = 0;
 	uint32_t adc1 = 0;
 	uint32_t adc2 = 0;
 	uint32_t adc3 = 0;
+	uint32_t adc4 = 0;
 
 	HAL_ADCEx_Calibration_Start(&hadc1);
 
@@ -131,12 +132,20 @@ void sampleAnalog(double &temperature, double &voltage0, double &voltage1)
 			adc3 += HAL_ADC_GetValue(&hadc1);
 			//printf("ADC1: %d\n", adc3);
 		}
+
+		HAL_ADC_Start(&hadc1);
+		if(HAL_ADC_PollForConversion(&hadc1, 1000) == HAL_OK)
+		{
+			adc4 += HAL_ADC_GetValue(&hadc1);
+			//printf("ADC2: %d\n", adc4);
+		}
 	}
 
 	adc0 >>= 4;
 	adc1 >>= 4;
 	adc2 >>= 4;
 	adc3 >>= 4;
+	adc4 >>= 4;
 
 	//this amount of steps measure 1.2V
 	double step = 1.2 / adc0;
@@ -154,50 +163,63 @@ void sampleAnalog(double &temperature, double &voltage0, double &voltage1)
 	//measure raw voltage
 	voltage0 = (((double)adc2 * step) + 0.01);
 	voltage1 = (((double)adc3 * step) + 0.01);
+	voltage2 = (((double)adc4 * step) + 0.01);
 
 	HAL_ADC_Stop(&hadc1);
 }
 
 uint32_t lastSampleTime = 0;
-double lastCPU, lastTemp0, lastTemp1;
+double lastCPU, lastTemp0, lastTemp1, lastOnboard;
 
-void sampleTemperatures(double &cpu, double &temp0, double &temp1)
+void sampleTemperatures(double &cpu, double &temp0, double &temp1, double &onboard)
 {
-	double v0, v1;
+	double v0, v1, v2;
 	//only sample every second
 	if(lastSampleTime)
 	{
 		if(HAL_GetTick() > (lastSampleTime + 1000))
 		{
-			sampleAnalog(cpu, v0, v1);
+			sampleAnalog(cpu, v0, v1, v2);
 		}
 		else
 		{
 			cpu = lastCPU;
 			temp0 = lastTemp0;
 			temp1 = lastTemp1;
+			onboard = lastOnboard;
 			return;
 		}
 	}
 	else
 	{
-		sampleAnalog(cpu, v0, v1);
+		sampleAnalog(cpu, v0, v1, v2);
 	}
 
 	temp0 = ((v0 * 2) - 2.73) * 100.0;
 	temp1 = ((v1 * 2) - 2.73) * 100.0;
+	onboard = ((v2 * 2) - 2.73) * 100.0;
 
 	lastSampleTime = HAL_GetTick();
 	lastCPU = cpu;
 	lastTemp0 = temp0;
 	lastTemp1 = temp1;
+	lastOnboard = onboard;
 }
+
+//uint32_t lastReport = 0;
 
 void report(uint8_t *address)
 {
-	//HAL_Delay(500);
-	double cpu,  temp0, temp1;
-	sampleTemperatures(cpu, temp0, temp1);
+//	//Report 60 seconds apart
+//	if(lastReport)
+//	{
+//		if((lastReport + 60000) > HAL_GetTick())
+//			return;
+//	}
+//	lastReport = HAL_GetTick();
+
+	double cpu, onboard, temp0, temp1;
+	sampleTemperatures(cpu, temp0, temp1, onboard);
 	nodeData_s pay;
 	memset(&pay, 0, 16);
 	pay.timestamp = HAL_GetTick();
@@ -207,8 +229,9 @@ void report(uint8_t *address)
 	if(HAL_GPIO_ReadPin(COOLER_GPIO_Port, COOLER_Pin))
 		pay.outputs |= 1;
 
-	pay.voltages[0] = temp0 * 1000;
-	pay.voltages[1] = temp1 * 1000;
+	pay.voltages[0] = onboard * 1000;
+	pay.voltages[1] = temp0 * 1000;
+	pay.voltages[2] = temp1 * 1000;
 	int result = -3;
 	int retries = 3;
 	do
@@ -327,6 +350,7 @@ int main(void)
 
   MX_SPI1_Init();
   MX_ADC1_Init();
+  tm1637Init();
 
 //  //configure node address up to PIPE5
 //  int nodeAddr = 0;
@@ -353,6 +377,9 @@ int main(void)
   printf(" - APB2 %dHz\n", (int)HAL_RCC_GetPCLK1Freq());
   printf(" - APB1 %dHz\n", (int)HAL_RCC_GetPCLK2Freq());
   MX_RTC_Init();
+
+
+  tm1637DisplayDecimal(8888, 0);
 
   int sendTemp = 0;
   double prevTemp = 0;
@@ -383,11 +410,12 @@ int main(void)
       if(sendTemp++ > 600)
       {
     	  sendTemp = 0;
-    	  double cpu, temp0, temp1;
-    	  sampleTemperatures(cpu, temp0, temp1);
+    	  double cpu, temp0, temp1, onboard;
+    	  sampleTemperatures(cpu, temp0, temp1, onboard);
     	  //only report if temperature changed by a degree
     	  if(((prevTemp - 0.5) > temp1) || (temp1 > (prevTemp + 0.5)))
     	  {
+    		  tm1637DisplayDecimal(temp1 * 100, 1);
     		  prevTemp = temp1;
     		  reportNow();
     	  }
@@ -588,6 +616,12 @@ static void MX_GPIO_Init(void)
 	GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
 	GPIO_InitStruct.Pull = GPIO_PULLDOWN;
 	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+	/*Configure GPIO pin : ADC12_IN2 */
+	GPIO_InitStruct.Pin = GPIO_PIN_2;
+	GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+	GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 }
 
 /* SPI1 init function */
@@ -622,7 +656,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ContinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.NbrOfDiscConversion = 1;
-  hadc1.Init.NbrOfConversion = 4;
+  hadc1.Init.NbrOfConversion = 5;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
@@ -655,6 +689,14 @@ static void MX_ADC1_Init(void)
 
   sConfig.Channel = ADC_CHANNEL_1;
   sConfig.Rank = ADC_REGULAR_RANK_4;
+  sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+	  _Error_Handler(__FILE__, __LINE__);
+  }
+
+  sConfig.Channel = ADC_CHANNEL_2;
+  sConfig.Rank = ADC_REGULAR_RANK_5;
   sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
@@ -717,9 +759,10 @@ void adc(uint8_t argc, char **argv)
 //	printf("voltage0: %d\n", voltage0);
 //	printf("voltage1: %d\n", voltage1);
 
-	double cpu, temp0, temp1;
-	sampleTemperatures(cpu, temp0, temp1);
+	double cpu, temp0, temp1, onboard;
+	sampleTemperatures(cpu, temp0, temp1, onboard);
 	printf("cpu  : %0.3f\n", cpu);
+	printf("onbrd: %0.3f\n", onboard);
 	printf("temp0: %0.3f\n", temp0);
 	printf("temp1: %0.3f\n", temp1);
 }

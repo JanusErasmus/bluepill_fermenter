@@ -13,7 +13,7 @@
 
 #define COOLER_REST_TIME 900000
 
-Fermenter::Fermenter(void (*sample_cb)(double &cpu, double &temp0, double &temp1),
+Fermenter::Fermenter(void (*sample_cb)(double &cpu, double &temp0, double &temp1, double &temp2),
 		void (*cooler_control)(bool state),
 		void (*heater_control)(bool state)) :
 		mSample_cb(sample_cb),
@@ -21,8 +21,14 @@ Fermenter::Fermenter(void (*sample_cb)(double &cpu, double &temp0, double &temp1
 		mHeaterControl(heater_control),
 		mCoolerDisableTime(COOLER_REST_TIME + 1),
 		mRunCounter(0),
-		mSetPoint(19)
+		mSetPoint(19),
+		mState(OFF)
 {
+	if(mHeaterControl)
+		mHeaterControl(false);
+
+	if(mCoolerControl)
+		mCoolerControl(false);
 }
 
 //Run should be called every 100ms
@@ -38,15 +44,17 @@ void Fermenter::run()
 	if(!mSample_cb)
 		return;
 
-	double cpu, temp0, temp1;
-	mSample_cb(cpu, temp0, temp1);
-	printf("Fermenter run %0.3f %0.3f %0.3f\n", cpu, temp0, temp1);
+	double cpu, temp0, temp1, temp2;
+	mSample_cb(cpu, temp0, temp1, temp2);
+	printf("Fermenter run %0.3f %0.3f %0.3f %0.3f\n", cpu, temp0, temp1, temp2);
 
 	double feedback = round(temp1);
-	if(mCoolerControl)
+	printf("Fermenter Ctrl %0.3f -> %0.3f\n", feedback, mSetPoint);
+	//try keep set point using temp1 (outside liquid)
+	switch(mState)
 	{
-		printf("Fermenter Ctrl %0.3f -> %0.3f\n", feedback, mSetPoint);
-		//try keep set point using temp1 (outside liquid)
+	//this will either start cooling or heating the fermenter
+	case OFF:
 		if(feedback > (mSetPoint + 1))
 		{
 			//we can only enable the cooler after it was off for the rest time
@@ -55,7 +63,9 @@ void Fermenter::run()
 				uint32_t disbaledDelta = HAL_GetTick() - mCoolerDisableTime;
 				if(disbaledDelta > COOLER_REST_TIME)
 				{
-					mCoolerControl(true);
+					if(mCoolerControl)
+						mCoolerControl(true);
+					mState = COOLING;
 				}
 				else
 				{
@@ -66,16 +76,27 @@ void Fermenter::run()
 			{
 				//start checking cooler disable time
 				mCoolerDisableTime = 1;
-				mCoolerControl(true);
+				if(mCoolerControl)
+					mCoolerControl(true);
+				mState = COOLING;
 			}
 		}
-
+		break;
+	case COOLING:
 		if(feedback < (mSetPoint - 1))
 		{
-			mCoolerControl(false);
+			if(mCoolerControl)
+				mCoolerControl(false);
 			if(mCoolerDisableTime)
 				mCoolerDisableTime = HAL_GetTick();
+
+			mState = OFF;
 		}
+		break;
+
+	case HEATING:
+		mState = OFF;
+		break;
 	}
 }
 

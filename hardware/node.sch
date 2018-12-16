@@ -162,7 +162,7 @@ AR Path="/5C14BC04" Ref="U?"  Part="1"
 AR Path="/5C14BAF9/5C14BC04" Ref="U2"  Part="1" 
 F 0 "U2" H 5675 2278 50  0000 C CNN
 F 1 "BluePill_STM32F103C" H 5675 2187 50  0000 C CNN
-F 2 "BLUEPILL" H 5700 2150 50  0001 C CNN
+F 2 "DIP40" H 5700 2150 50  0001 C CNN
 F 3 "www.rogerclark.net" H 5650 2250 50  0001 C CNN
 	1    5650 3750
 	1    0    0    -1  
@@ -201,5 +201,19 @@ Text HLabel 7250 3450 2    50   Output ~ 0
 PB8
 Text HLabel 7250 3350 2    50   Output ~ 0
 PB9
-NoConn ~ 6550 3150
+$Comp
+L power:GNDREF #PWR?
+U 1 1 5C16DC3A
+P 6700 3150
+AR Path="/5C16DC3A" Ref="#PWR?"  Part="1" 
+AR Path="/5C14BAF9/5C16DC3A" Ref="#PWR?"  Part="1" 
+F 0 "#PWR?" H 6700 2900 50  0001 C CNN
+F 1 "GNDREF" H 6705 2977 50  0001 C CNN
+F 2 "" H 6700 3150 50  0001 C CNN
+F 3 "" H 6700 3150 50  0001 C CNN
+	1    6700 3150
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	6700 3150 6550 3150
 $EndSCHEMATC

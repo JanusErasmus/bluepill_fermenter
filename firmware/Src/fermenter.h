@@ -10,15 +10,22 @@
 
 class Fermenter
 {
-	void (*mSample_cb)(double &cpu, double &temp0, double &temp1);
+	enum eFermenterState
+	{
+		OFF,
+		COOLING,
+		HEATING
+	};
+	void (*mSample_cb)(double &cpu, double &temp0, double &temp1, double &temp2);
 	void (*mCoolerControl)(bool state);
 	void (*mHeaterControl)(bool state);
 	uint32_t mCoolerDisableTime;
 	int mRunCounter;
 	double mSetPoint;
+	eFermenterState mState;
 
 public:
-	Fermenter(void (*sample_temp_cb)(double &cpu, double &temp0, double &temp1),
+	Fermenter(void (*sample_temp_cb)(double &cpu, double &temp0, double &temp1, double &temp2),
 			void (*cooler_control)(bool state),
 			void (*heater_control)(bool state));
 	void run();

@@ -15,6 +15,10 @@ void adc(uint8_t argc, char **argv);
 const sTermEntry_t adcEntry =
 { "a", "ADC sample", adc };
 
+void setFerment(uint8_t argc, char **argv);
+const sTermEntry_t setEntry =
+{ "s", "Set ferment temp", setFerment };
+
 const sTermEntry_t *cli_entries[] =
 {
       &hEntry,
@@ -24,5 +28,6 @@ const sTermEntry_t *cli_entries[] =
 	  &rtcEntry,
 	  &nrfEntry,
 	  &adcEntry,
+	  &setEntry,
       0
 };

@@ -139,6 +139,8 @@ void sampleAnalog(double &temperature, double &voltage0, double &voltage1, doubl
 			adc4 += HAL_ADC_GetValue(&hadc1);
 			//printf("ADC2: %d\n", adc4);
 		}
+
+		HAL_Delay(100);
 	}
 
 	adc0 >>= 4;
@@ -171,22 +173,22 @@ void sampleAnalog(double &temperature, double &voltage0, double &voltage1, doubl
 uint32_t lastSampleTime = 0;
 double lastCPU, lastTemp0, lastTemp1, lastOnboard;
 
-void sampleTemperatures(double &cpu, double &temp0, double &temp1, double &onboard)
+void sampleTemperatures(double &cpu, double &onboard, double &temp0, double &temp1)
 {
 	double v0, v1, v2;
-	//only sample every second
+	//only sample every 5 seconds
 	if(lastSampleTime)
 	{
-		if(HAL_GetTick() > (lastSampleTime + 1000))
+		if(HAL_GetTick() > (lastSampleTime + 5000))
 		{
 			sampleAnalog(cpu, v0, v1, v2);
 		}
 		else
 		{
 			cpu = lastCPU;
+			onboard = lastOnboard;
 			temp0 = lastTemp0;
 			temp1 = lastTemp1;
-			onboard = lastOnboard;
 			return;
 		}
 	}
@@ -195,18 +197,30 @@ void sampleTemperatures(double &cpu, double &temp0, double &temp1, double &onboa
 		sampleAnalog(cpu, v0, v1, v2);
 	}
 
-	temp0 = ((v0 * 2) - 2.73) * 100.0;
-	temp1 = ((v1 * 2) - 2.73) * 100.0;
+	printf("Voltages:\n");
+	printf(" 0: %0.3f\n", v0);
+	printf(" 1: %0.3f\n", v1);
+	printf(" 2: %0.3f\n", v2);
+
+	temp0 = (((v0 * 2) - 2.73) * 100.0);
+	temp1 = (((v1 * 2) - 2.73) * 100.0);
 	onboard = ((v2 * 2) - 2.73) * 100.0;
 
 	lastSampleTime = HAL_GetTick();
 	lastCPU = cpu;
+	lastOnboard = onboard;
 	lastTemp0 = temp0;
 	lastTemp1 = temp1;
-	lastOnboard = onboard;
+}
+
+void sampleFermenter(double &temp)
+{
+	double cpu, onboard, temp0;
+	sampleTemperatures(cpu, onboard, temp0, temp);
 }
 
 //uint32_t lastReport = 0;
+Fermenter *_fermenter = 0;
 
 void report(uint8_t *address)
 {
@@ -219,19 +233,25 @@ void report(uint8_t *address)
 //	lastReport = HAL_GetTick();
 
 	double cpu, onboard, temp0, temp1;
-	sampleTemperatures(cpu, temp0, temp1, onboard);
+	sampleTemperatures(cpu, onboard, temp0, temp1);
 	nodeData_s pay;
 	memset(&pay, 0, 16);
 	pay.timestamp = HAL_GetTick();
 	pay.temperature = cpu * 1000;
 
-
-	if(HAL_GPIO_ReadPin(COOLER_GPIO_Port, COOLER_Pin))
-		pay.outputs |= 1;
-
 	pay.voltages[0] = onboard * 1000;
 	pay.voltages[1] = temp0 * 1000;
 	pay.voltages[2] = temp1 * 1000;
+	pay.voltages[3] = 30000;
+
+
+	if(HAL_GPIO_ReadPin(COOLER_GPIO_Port, COOLER_Pin))
+	{
+		pay.outputs |= 1;
+		if(_fermenter)
+			pay.voltages[3] = _fermenter->get() * 1000;
+	}
+
 	int result = -3;
 	int retries = 3;
 	do
@@ -351,6 +371,7 @@ int main(void)
   MX_SPI1_Init();
   MX_ADC1_Init();
   tm1637Init();
+  tm1637DisplayDecimal(8888, 0);
 
 //  //configure node address up to PIPE5
 //  int nodeAddr = 0;
@@ -369,9 +390,11 @@ int main(void)
   InterfaceNRF24::init(&hspi1, netAddress, 3);
   InterfaceNRF24::get()->setRXcb(NRFreceivedCB);
 
-  Fermenter fermenter(sampleTemperatures,
-		  coolerControl,
-		  heaterControl);
+  Fermenter fermenter(sampleFermenter,
+  		  coolerControl,
+  		  heaterControl);
+
+  _fermenter = &fermenter;
 
   printf("Bluepills @ %dHz\n", (int)HAL_RCC_GetSysClockFreq());
   printf(" - APB2 %dHz\n", (int)HAL_RCC_GetPCLK1Freq());
@@ -379,11 +402,13 @@ int main(void)
   MX_RTC_Init();
 
 
-  tm1637DisplayDecimal(8888, 0);
 
   int sendTemp = 0;
   double prevTemp = 0;
   bool flag = false;
+  sampleFermenter(prevTemp);
+  tm1637DisplayDecimal(prevTemp * 100, 1);
+  prevTemp = 0;
 
   /* Infinite loop */
   while (1)
@@ -402,7 +427,7 @@ int main(void)
 
 	  terminal_run();
 	  InterfaceNRF24::get()->run();
-	  fermenter.run();
+	  _fermenter->run();
 
 	  HAL_Delay(100);
 
@@ -411,7 +436,7 @@ int main(void)
       {
     	  sendTemp = 0;
     	  double cpu, temp0, temp1, onboard;
-    	  sampleTemperatures(cpu, temp0, temp1, onboard);
+    	  sampleTemperatures(cpu, onboard, temp0, temp1);
     	  //only report if temperature changed by a degree
     	  if(((prevTemp - 0.5) > temp1) || (temp1 > (prevTemp + 0.5)))
     	  {
@@ -608,7 +633,7 @@ static void MX_GPIO_Init(void)
 	/*Configure GPIO pin : ADC12_IN0 */
 	GPIO_InitStruct.Pin = GPIO_PIN_0;
 	GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Pull = GPIO_PULLDOWN;
 	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
 	/*Configure GPIO pin : ADC12_IN1 */
@@ -760,11 +785,13 @@ void adc(uint8_t argc, char **argv)
 //	printf("voltage1: %d\n", voltage1);
 
 	double cpu, temp0, temp1, onboard;
-	sampleTemperatures(cpu, temp0, temp1, onboard);
-	printf("cpu  : %0.3f\n", cpu);
-	printf("onbrd: %0.3f\n", onboard);
-	printf("temp0: %0.3f\n", temp0);
-	printf("temp1: %0.3f\n", temp1);
+	sampleTemperatures(cpu, onboard, temp0, temp1);
+	printf("Temperatures:\n");
+	printf(" cpu  : %0.3f\n", cpu);
+	//printf("onbrd: %0.3f\n", onboard);
+	printf(" temp0: %0.3f\n", temp0);
+	printf(" temp1: %0.3f\n", temp1);
+	printf("      :         %0.3f\n", temp0 - temp1);
 }
 
 
@@ -796,6 +823,21 @@ void rtc_debug(uint8_t argc, char **argv)
 	printf("RTC date: %s %d\n", getDayName(sDate.WeekDay), (int)HAL_RTC_SecondsSinceEpoch(sDate, sTime));
 	printf(" - %04d-%02d-%02d ", 2000 +sDate.Year, sDate.Month, sDate.Date);
 	printf("%02d:%02d:%02d\n", sTime.Hours, sTime.Minutes, sTime.Seconds);
+}
+
+void setFerment(uint8_t argc, char **argv)
+{
+	if(argc > 1)
+	{
+		int setPoint = atoi(argv[1]);
+		printf("Setting temperature %d\n",setPoint);
+
+		_fermenter->set(setPoint);
+	}
+	else
+	{
+		printf("Fermenter set: %d\n", _fermenter->get());
+	}
 }
 
 #ifdef __cplusplus

@@ -13,13 +13,13 @@
 
 #define COOLER_REST_TIME 900000
 
-Fermenter::Fermenter(void (*sample_cb)(double &cpu, double &temp0, double &temp1, double &temp2),
+Fermenter::Fermenter(void (*sample_cb)(double &temp),
 		void (*cooler_control)(bool state),
 		void (*heater_control)(bool state)) :
 		mSample_cb(sample_cb),
 		mCoolerControl(cooler_control),
 		mHeaterControl(heater_control),
-		mCoolerDisableTime(COOLER_REST_TIME + 1),
+		mCoolerDisableTime(0),
 		mRunCounter(0),
 		mSetPoint(19),
 		mState(OFF)
@@ -44,13 +44,11 @@ void Fermenter::run()
 	if(!mSample_cb)
 		return;
 
-	double cpu, temp0, temp1, temp2;
-	mSample_cb(cpu, temp0, temp1, temp2);
-	printf("Fermenter run %0.3f %0.3f %0.3f %0.3f\n", cpu, temp0, temp1, temp2);
+	double feedback;
+	mSample_cb(feedback);
 
-	double feedback = round(temp1);
 	printf("Fermenter Ctrl %0.3f -> %0.3f\n", feedback, mSetPoint);
-	//try keep set point using temp1 (outside liquid)
+	//try keep set point using temp (outside liquid)
 	switch(mState)
 	{
 	//this will either start cooling or heating the fermenter
@@ -69,7 +67,7 @@ void Fermenter::run()
 				}
 				else
 				{
-					printf("Cooler was only off for %d seconds\n", (int)disbaledDelta);
+					printf("Cooler was only off for %d seconds\n", (int)(disbaledDelta / 1000));
 				}
 			}
 			else

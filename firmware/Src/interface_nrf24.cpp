@@ -230,7 +230,6 @@ int InterfaceNRF24::transmit(uint8_t *addr, uint8_t *payload, uint8_t length)
     // Configure TX PIPE
     nRF24_SetAddr(nRF24_PIPETX, addr); // program TX address
 	nRF24_SetAddr(nRF24_PIPE0, addr); // program address for pipe to receive ACK
-	nRF24_SetRXPipe(nRF24_PIPE0	, nRF24_AA_ON, 10); // Auto-ACK: enabled, payload length: 10 bytes
 
     printf("ADDR: \n");
     diag_dump_buf(addr, 3);

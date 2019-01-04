@@ -242,14 +242,15 @@ void report(uint8_t *address)
 	pay.voltages[0] = onboard * 1000;
 	pay.voltages[1] = temp0 * 1000;
 	pay.voltages[2] = temp1 * 1000;
-	pay.voltages[3] = 30000;
+	pay.voltages[3] = 0;
+
+	if(_fermenter)
+		pay.voltages[3] = _fermenter->get() * 1000;
 
 
 	if(HAL_GPIO_ReadPin(COOLER_GPIO_Port, COOLER_Pin))
 	{
 		pay.outputs |= 1;
-		if(_fermenter)
-			pay.voltages[3] = _fermenter->get() * 1000;
 	}
 
 	int result = -3;
@@ -329,6 +330,20 @@ bool NRFreceivedCB(int pipe, uint8_t *data, int len)
 	if(pipe == 1)
 	{
 		report(netAddress);
+	}
+
+	//command pipe
+	if(pipe == 0)
+	{
+		if(_fermenter)
+		{
+			int setpoint = down.voltages[0];
+			printf("Set set-point: %d\n", setpoint);
+
+			_fermenter->set(setpoint);
+
+			report(netAddress);
+		}
 	}
 
 	return false;

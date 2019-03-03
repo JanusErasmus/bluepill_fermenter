@@ -341,6 +341,8 @@ bool NRFreceivedCB(int pipe, uint8_t *data, int len)
 			int setpoint = down.voltages[0];
 			printf("Set set-point: %d\n", setpoint);
 
+			HAL_RTCEx_DeactivateTamper(&hrtc, RTC_TAMPER_1);
+			HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR5, setpoint);
 			_fermenter->set(setpoint);
 
 			report(netAddress);
@@ -406,18 +408,19 @@ int main(void)
   InterfaceNRF24::init(&hspi1, netAddress, 3);
   InterfaceNRF24::get()->setRXcb(NRFreceivedCB);
 
-  Fermenter fermenter(sampleFermenter,
-  		  coolerControl,
-  		  heaterControl);
-
-  _fermenter = &fermenter;
-
   printf("Bluepills @ %dHz\n", (int)HAL_RCC_GetSysClockFreq());
   printf(" - APB2 %dHz\n", (int)HAL_RCC_GetPCLK1Freq());
   printf(" - APB1 %dHz\n", (int)HAL_RCC_GetPCLK2Freq());
   MX_RTC_Init();
 
+  int setpoint = HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR5);
+  printf("RD5: %d\n", setpoint);
+  Fermenter fermenter(setpoint,
+		  sampleFermenter,
+  		  coolerControl,
+  		  heaterControl);
 
+  _fermenter = &fermenter;
 
   int sendTemp = 0;
   double prevTemp = 0;
@@ -853,6 +856,7 @@ void setFerment(uint8_t argc, char **argv)
 		int setPoint = atoi(argv[1]);
 		printf("Setting temperature %d\n",setPoint);
 
+		HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR5, setPoint);
 		_fermenter->set(setPoint);
 	}
 	else

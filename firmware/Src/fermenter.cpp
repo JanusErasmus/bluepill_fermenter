@@ -13,7 +13,8 @@
 
 #define COOLER_REST_TIME 900000
 
-Fermenter::Fermenter(void (*sample_cb)(double &temp),
+Fermenter::Fermenter(int setpoint,
+		void (*sample_cb)(double &temp),
 		void (*cooler_control)(bool state),
 		void (*heater_control)(bool state)) :
 		mSample_cb(sample_cb),
@@ -21,7 +22,7 @@ Fermenter::Fermenter(void (*sample_cb)(double &temp),
 		mHeaterControl(heater_control),
 		mCoolerDisableTime(0),
 		mRunCounter(0),
-		mSetPoint(19),
+		mSetPoint(setpoint),
 		mState(OFF)
 {
 	if(mHeaterControl)
@@ -29,6 +30,8 @@ Fermenter::Fermenter(void (*sample_cb)(double &temp),
 
 	if(mCoolerControl)
 		mCoolerControl(false);
+
+	printf("Fermenter created, Set point %d\n", setpoint);
 }
 
 //Run should be called every 100ms

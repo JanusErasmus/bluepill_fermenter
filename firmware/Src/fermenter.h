@@ -25,7 +25,8 @@ class Fermenter
 	eFermenterState mState;
 
 public:
-	Fermenter(void (*sample_temp_cb)(double &temperature),
+	Fermenter(int setpoint,
+			void (*sample_temp_cb)(double &temperature),
 			void (*cooler_control)(bool state),
 			void (*heater_control)(bool state));
 	void run();

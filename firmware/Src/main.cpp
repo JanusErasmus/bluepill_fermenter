@@ -197,10 +197,10 @@ void sampleTemperatures(double &cpu, double &onboard, double &temp0, double &tem
 		sampleAnalog(cpu, v0, v1, v2);
 	}
 
-	printf("Voltages:\n");
-	printf(" 0: %0.3f\n", v0);
-	printf(" 1: %0.3f\n", v1);
-	printf(" 2: %0.3f\n", v2);
+//	printf("Voltages:\n");
+//	printf(" 0: %0.3f\n", v0);
+//	printf(" 1: %0.3f\n", v1);
+//	printf(" 2: %0.3f\n", v2);
 
 	temp0 = (((v0 * 2) - 2.73) * 100.0);
 	temp1 = (((v1 * 2) - 2.73) * 100.0);
@@ -232,6 +232,10 @@ void report(uint8_t *address)
 //	}
 //	lastReport = HAL_GetTick();
 
+	//Do not report before all values are known
+	if(!_fermenter)
+		return;
+
 	double cpu, onboard, temp0, temp1;
 	sampleTemperatures(cpu, onboard, temp0, temp1);
 	nodeData_s pay;
@@ -242,11 +246,8 @@ void report(uint8_t *address)
 	pay.voltages[0] = onboard * 1000;
 	pay.voltages[1] = temp0 * 1000;
 	pay.voltages[2] = temp1 * 1000;
-	pay.voltages[3] = 0;
 
-	if(_fermenter)
-		pay.voltages[3] = _fermenter->get() * 1000;
-
+	pay.voltages[3] = _fermenter->getSetpoint() * 1000;
 
 	if(HAL_GPIO_ReadPin(COOLER_GPIO_Port, COOLER_Pin))
 	{
@@ -439,12 +440,12 @@ int main(void)
 		  flag = true;
 		  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
 	  }
+	  HAL_Delay(100);
 
 	  terminal_run();
 	  InterfaceNRF24::get()->run();
 	  _fermenter->run();
 
-	  HAL_Delay(100);
 
       //send temperature samples every minute;
       if(sendTemp++ > 600)
@@ -529,11 +530,14 @@ static void MX_RTC_Init(void)
   RTC_TimeTypeDef sTime;
   RTC_DateTypeDef sDate;
 
+
     /**Initialize RTC Only 
     */
   hrtc.Instance = RTC;
+  hrtc.State = HAL_RTC_STATE_RESET;
   hrtc.Init.AsynchPrediv = RTC_AUTO_1_SECOND;
   hrtc.Init.OutPut = RTC_OUTPUTSOURCE_NONE;
+
   if (HAL_RTC_Init(&hrtc) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
@@ -806,7 +810,7 @@ void adc(uint8_t argc, char **argv)
 	//printf("onbrd: %0.3f\n", onboard);
 	printf(" temp0: %0.3f\n", temp0);
 	printf(" temp1: %0.3f\n", temp1);
-	printf("      :         %0.3f\n", temp0 - temp1);
+	//printf("      :  delta  %0.3f\n", temp0 - temp1);
 }
 
 
@@ -826,6 +830,8 @@ void rtc_debug(uint8_t argc, char **argv)
 		sTime.Hours = atoi(argv[4]);
 		sTime.Minutes = atoi(argv[5]);
 		sTime.Seconds = 0;
+
+		HAL_RTCEx_DeactivateTamper(&hrtc, RTC_TAMPER_1);
 
 		HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
 		HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
@@ -851,7 +857,7 @@ void setFerment(uint8_t argc, char **argv)
 	}
 	else
 	{
-		printf("Fermenter set: %d\n", _fermenter->get());
+		printf("Fermenter set: %d\n", _fermenter->getSetpoint());
 	}
 }
 

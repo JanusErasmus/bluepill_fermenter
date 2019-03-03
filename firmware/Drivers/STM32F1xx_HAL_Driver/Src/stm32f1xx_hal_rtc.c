@@ -252,18 +252,6 @@ HAL_StatusTypeDef HAL_RTC_Init(RTC_HandleTypeDef *hrtc)
   assert_param(IS_RTC_ALL_INSTANCE(hrtc->Instance));
   assert_param(IS_RTC_CALIB_OUTPUT(hrtc->Init.OutPut));
   assert_param(IS_RTC_ASYNCH_PREDIV(hrtc->Init.AsynchPrediv));
-    
-  if(HAL_RTCEx_BKUPRead(hrtc, RTC_BKP_DR1) == 0x32F2)
-  {
-  	uint32_t dateReg = HAL_RTCEx_BKUPRead(hrtc, RTC_BKP_DR2);
-  	hrtc->DateToUpdate.Year = (dateReg >> 8) & 0xFF;
-  	hrtc->DateToUpdate.Month = (dateReg & 0xFF);
-  	hrtc->DateToUpdate.Date = HAL_RTCEx_BKUPRead(hrtc, RTC_BKP_DR3);
-
-  	RTC_DateUpdate(hrtc, 0);
-
-  	return HAL_OK;
-  }
 
   if(hrtc->State == HAL_RTC_STATE_RESET)
   {
@@ -272,6 +260,19 @@ HAL_StatusTypeDef HAL_RTC_Init(RTC_HandleTypeDef *hrtc)
     
     /* Initialize RTC MSP */
     HAL_RTC_MspInit(hrtc);
+  }
+
+  if(HAL_RTCEx_BKUPRead(hrtc, RTC_BKP_DR1) == 0x32F2)
+  {
+  	uint32_t dateReg = HAL_RTCEx_BKUPRead(hrtc, RTC_BKP_DR2);
+  	hrtc->DateToUpdate.Year = (dateReg >> 8) & 0xFF;
+  	hrtc->DateToUpdate.Month = (dateReg & 0xFF);
+  	hrtc->DateToUpdate.Date = HAL_RTCEx_BKUPRead(hrtc, RTC_BKP_DR3);
+  	RTC_DateUpdate(hrtc, 0);
+
+  	hrtc->State = HAL_RTC_STATE_READY;
+
+  	return HAL_OK;
   }
   
   /* Set RTC state */  

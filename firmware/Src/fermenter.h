@@ -31,7 +31,7 @@ public:
 	void run();
 
 	void set(int temp){ mSetPoint = temp; }
-	int get(){ return (int)mSetPoint; }
+	int getSetpoint(){ return (int)mSetPoint; }
 };
 
 
